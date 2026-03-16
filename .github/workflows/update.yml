@@ -1,0 +1,28 @@
+name: Update MC Versions
+on:
+  schedule:
+    - cron: '0 0 */2 * *' # Runs every 2 days at midnight
+  workflow_dispatch: # Allows you to trigger it manually
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Run Scraper
+        run: python scraper.py
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "VersionBot"
+          git config --global user.email "bot@github.com"
+          git add mc_versions.json
+          git commit -m "Merged new versions into list" || exit 0
+          git push
