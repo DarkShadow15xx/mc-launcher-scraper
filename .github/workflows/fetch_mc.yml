@@ -1,0 +1,41 @@
+name: Fetch Minecraft APK
+
+on:
+  workflow_dispatch: # Allows you to run it manually from the Actions tab
+  push:
+    branches:
+      - main # Runs whenever you push to main
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Run Fetch Script
+        run: |
+          # If your script is named fetcher.py
+          python fetcher.py 
+
+      - name: Upload Downloaded APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vanilla-apk
+          path: vanilla/*.apk
+          if-no-files-found: error
+
+      # Optional: If you want to commit the file back to the repo (not recommended for large APKs)
+      - name: Commit APK to Repo
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add vanilla/
+          git commit -m "Added new vanilla APK"
+          git push
