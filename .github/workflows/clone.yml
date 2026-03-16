@@ -36,6 +36,15 @@ jobs:
       - name: Run Python Patcher
         run: python clone_mc.py
 
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Add generated tools and modified APKs" || exit 0
+          git push
+
+
       - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
