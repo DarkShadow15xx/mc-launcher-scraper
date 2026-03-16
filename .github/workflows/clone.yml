@@ -15,6 +15,12 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          
+      - name: Install Android Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apksigner zipalign
+
 
       - name: Download Apktool
         run: |
