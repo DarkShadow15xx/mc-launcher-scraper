@@ -34,11 +34,6 @@ jobs:
           -storepass password123 -keypass password123 \
           -dname "CN=MinecraftCloner, OU=Dev, O=Self, L=World, S=Internet, C=US"
 
-      - name: Install Android Build Tools (apksigner)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y apksigner
-
       - name: Run Python Patcher
         run: python clone_mc.py
 
