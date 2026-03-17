@@ -1,0 +1,49 @@
+name: Prepare Minecraft Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Minecraft Version to process (e.g., 1.20.10)'
+        required: true
+        default: '1.20.10'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create releases
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+          sudo apt install gh -y
+
+      - name: Run Fetcher
+        env:
+          TARGET_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          # The TARGET_VERSION is passed into the python script
+          python fetcher.py
+
+      - name: Run Clone and Push to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          # Process the APK and upload to GitHub Releases
+          python clone_mc.py
+
+      - name: Cleanup
+        run: |
+          rm -rf vanilla/*.apk
+          rm -rf mc-modified/*.zip
