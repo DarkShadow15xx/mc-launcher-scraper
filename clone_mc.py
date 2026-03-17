@@ -1,100 +1,74 @@
-import subprocess
 import os
-import re
+import zipfile
 import shutil
+import glob
+import subprocess
 
-# --- Configuration ---
-APKTOOL_JAR = "apktool.jar"
-VANILLA_FOLDER = "vanilla"
-MODIFIED_FOLDER = "modified-mc"
-TEMP_DIR = "temp_work"
-KEYSTORE_FILE = "my-release-key.jks"
-KS_ALIAS = "my_alias"
-KS_PASS = "password123"
-
-def run_cmd(cmd):
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"Error: {result.stderr}")
-        return False
-    return True
-
-def patch_smali(directory, old_pkg, new_pkg):
-    old_pkg_slash = old_pkg.replace(".", "/")
-    new_pkg_slash = new_pkg.replace(".", "/")
-    
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.endswith((".smali", ".xml", ".yml")):
-                path = os.path.join(root, file)
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    data = f.read()
-                
-                new_data = data.replace(old_pkg, new_pkg).replace(old_pkg_slash, new_pkg_slash)
-                
-                if data != new_data:
-                    with open(path, "w", encoding="utf-8") as f:
-                        f.write(new_data)
+# Your repository folders
+VANILLA_DIR = 'Vanilla'
+MODIFIED_DIR = 'mc-modified'
 
 def process_apks():
-    if not os.path.exists(MODIFIED_FOLDER):
-        os.makedirs(MODIFIED_FOLDER)
+    # Make sure the output folder exists
+    os.makedirs(MODIFIED_DIR, exist_ok=True)
 
-    for apk_file in os.listdir(VANILLA_FOLDER):
-        if not apk_file.endswith(".apk"): continue
+    # Find all APKs in the Vanilla folder
+    apk_files = glob.glob(os.path.join(VANILLA_DIR, '*.apk'))
+    
+    if not apk_files:
+        print("No APKs found in the Vanilla folder.")
+        return
 
-        # Extract version for package name (e.g., 1.20.1 -> 1201)
-        version_match = re.search(r'(\d+\.\d+\.\d+)', apk_file)
-        raw_version = version_match.group(1) if version_match else "cloned"
-        v_suffix = raw_version.replace(".", "")
+    for apk_path in apk_files:
+        # Extract the version number from the filename (e.g., "1.20.10.apk" -> "1.20.10")
+        filename = os.path.basename(apk_path)
+        version = filename.replace('.apk', '')
         
-        # Format requested: com.mojang.[version]
-        new_package = f"com.mojang.{v_suffix}"
+        output_path = os.path.join(MODIFIED_DIR, version)
+        zip_name = f"{version}_engine.zip"
+        zip_path = os.path.join(MODIFIED_DIR, zip_name)
         
-        print(f"--- Cloning Minecraft to: {new_package} ---")
-
-        # 1. Decompile
-        run_cmd(["java", "-jar", APKTOOL_JAR, "d", f"{VANILLA_FOLDER}/{apk_file}", "-o", TEMP_DIR, "-f"])
-
-        # 2. Modify Manifest (Package Name, Target SDK, and Launcher)
-        manifest_path = os.path.join(TEMP_DIR, "AndroidManifest.xml")
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        os.makedirs(output_path, exist_ok=True)
         
-        # Update Package Name
-        content = content.replace("com.mojang.minecraftpe", new_package)
+        print(f"[{version}] Extracting core engine and assets...")
+
+        # Open the APK (which is just a fancy ZIP file)
+        with zipfile.ZipFile(apk_path, 'r') as apk:
+            for file_info in apk.infolist():
+                # We ONLY want the assets folder and the 64-bit C++ engine
+                if file_info.filename.startswith('assets/') or 'arm64-v8a/libminecraftpe.so' in file_info.filename:
+                    apk.extract(file_info, output_path)
+
+        print(f"[{version}] Reorganizing files...")
         
-        # Update Target SDK to modern Android (Target 34 = Android 14)
-        content = re.sub(r'android:targetSdkVersion="\d+"', 'android:targetSdkVersion="34"', content)
+        # The C++ script expects libminecraftpe.so to be right next to the assets folder.
+        so_file_path = os.path.join(output_path, 'lib', 'arm64-v8a', 'libminecraftpe.so')
+        if os.path.exists(so_file_path):
+            shutil.move(so_file_path, os.path.join(output_path, 'libminecraftpe.so'))
+            
+            # Clean up the empty 'lib' folder
+            shutil.rmtree(os.path.join(output_path, 'lib'))
+
+        print(f"[{version}] Compressing for download...")
+        shutil.make_archive(os.path.join(MODIFIED_DIR, f"{version}_engine"), 'zip', output_path)
         
-        # Remove Launcher Intent (removes home screen icon)
-        content = re.sub(r'<category\s+android:name="android.intent.category.LAUNCHER"\s*/>', '', content)
+        # Clean up the raw extracted folder to save space
+        shutil.rmtree(output_path)
         
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            f.write(content)
+        print(f"[{version}] Sending to GitHub Releases...")
+        # Use GitHub CLI to create a release and attach the ZIP
+        try:
+            subprocess.run([
+                "gh", "release", "create", version, 
+                zip_path, 
+                "--title", f"Engine {version}", 
+                "--notes", f"Automated extraction for EmpireX Launcher"
+            ], check=True)
+            print(f"[{version}] Successfully uploaded to Releases!")
+        except subprocess.CalledProcessError:
+            print(f"[{version}] Release might already exist or CLI failed. Continuing...")
 
-        # 3. Deep patch smali files
-        patch_smali(TEMP_DIR, "com.mojang.minecraftpe", new_package)
-
-        # 4. Build
-        # Note: we name the intermediate file temp.apk
-        temp_build_apk = "temp_unsigned.apk"
-        run_cmd(["java", "-jar", APKTOOL_JAR, "b", TEMP_DIR, "-o", temp_build_apk])
-
-        # 5. Zipalign (Crucial for "App Not Compatible" errors)
-        final_output_apk = os.path.join(MODIFIED_FOLDER, f"mc_{v_suffix}.apk")
-        print("Aligning APK...")
-        run_cmd(["zipalign", "-f", "-v", "4", temp_build_apk, final_output_apk])
-
-        # 6. Sign
-        print("Signing APK...")
-        run_cmd(["apksigner", "sign", "--ks", KEYSTORE_FILE, "--ks-pass", f"pass:{KS_PASS}", 
-                 "--ks-key-alias", KS_ALIAS, final_output_apk])
-
-        # Cleanup
-        if os.path.exists(temp_build_apk): os.remove(temp_build_apk)
-        shutil.rmtree(TEMP_DIR)
-        print(f"Success! Created: {final_output_apk}\n")
+        print(f"[{version}] Done! Ready for Launcher.\n")
 
 if __name__ == "__main__":
     process_apks()
