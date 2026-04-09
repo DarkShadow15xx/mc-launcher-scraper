@@ -1,5 +1,11 @@
 [
     {
+        "title": "Minecraft 26.20.26 (1.26.20.26)",
+        "version": "26.20.26",
+        "type": "Full Release",
+        "link": "https://mcpedl.org/minecraft-pe-26-20-26-apk/"
+    },
+    {
         "title": "Minecraft 26.20.24 (1.26.20.24)",
         "version": "26.20.24",
         "type": "Full Release",
@@ -88,6 +94,12 @@
         "version": "26.0.23",
         "type": "Full Release",
         "link": "https://mcpedl.org/minecraft-pe-26-0-23-apk/"
+    },
+    {
+        "title": "Minecraft 26.13 (1.26.13) APK",
+        "version": "1.26.13",
+        "type": "Full Release",
+        "link": "https://mcpedl.org/minecraft-pe-26-13-apk/"
     },
     {
         "title": "Minecraft 26.10 (1.26.10) APK",
